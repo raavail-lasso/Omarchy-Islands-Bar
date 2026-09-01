@@ -1856,6 +1856,17 @@ Item {
     property string outputTooltip: ""
     property bool outputActive: false
 
+    readonly property string execCommand: String(setting("exec", ""))
+    readonly property int execIntervalMs: Math.max(1, Number(setting("interval", 5))) * 1000
+    // A custom module runs whatever command its owner configured, on a
+    // repeat, so its output gets the same two guard rails: a byte cap on what
+    // the shell will buffer, and a deadline on the run. Without them a chatty
+    // command (`journalctl -f`) or a hung one would grow the shell's memory
+    // for as long as the bar is up. `timeout` seconds is overridable per
+    // module for the rare command that legitimately takes its time.
+    readonly property int maxOutputBytes: 65536
+    readonly property int execTimeoutSeconds: Math.max(1, Math.round(Number(setting("timeout", 10))))
+
     function setting(name, fallback) {
       var value = settings ? settings[name] : undefined
       return value === undefined || value === null ? fallback : value
@@ -1891,21 +1902,66 @@ Item {
       if (command) root.run(command)
     }
 
+    // Skips the tick when the previous run is still going, so a slow command
+    // can never stack up several copies of itself waiting on the same label.
+    function startExec() {
+      if (!execCommand || customProc.running) return
+
+      customProc.output = ""
+      customProc.truncated = false
+      customProc.running = true
+    }
+
     Process {
       id: customProc
-      command: ["bash", "-lc", String(customRoot.setting("exec", ""))]
+
+      // `timeout` runs the command in its own process group and signals the
+      // whole group, so a cut-short run doesn't leave children behind holding
+      // the pipe open. -k follows the deadline's TERM with a KILL for
+      // anything that ignores it.
+      command: ["timeout", "-k", "1s", customRoot.execTimeoutSeconds + "s",
+                "bash", "-lc", customRoot.execCommand]
+
+      // What this run has printed so far, and whether we cut it off.
+      // startExec() resets both before every start.
+      property string output: ""
+      property bool truncated: false
+
       stdout: StdioCollector {
-        waitForEnd: true
-        onStreamFinished: customRoot.update(text)
+        // Deliberately not waitForEnd: that buffers the entire stream,
+        // however large, before handing any of it over. Reading chunk by
+        // chunk lets us stop the moment a run passes the cap.
+        waitForEnd: false
+        onDataChanged: {
+          if (customProc.truncated) return
+
+          if (text.length > customRoot.maxOutputBytes) {
+            // Past the cap the output is cut mid-line, so there's no label to
+            // read out of it. Drop the run; `running = false` sends TERM,
+            // which timeout passes on to the command.
+            customProc.truncated = true
+            customProc.output = ""
+            customProc.running = false
+          } else {
+            customProc.output = text
+          }
+        }
+      }
+
+      // A capped or timed-out run (timeout reports the deadline as 124) has
+      // nothing showable, so fall back to the module's configured text the
+      // same way an empty run does.
+      onExited: function(exitCode) {
+        customRoot.update(exitCode === 124 || customProc.truncated ? "" : customProc.output)
       }
     }
 
     Timer {
-      interval: Math.max(1, Number(customRoot.setting("interval", 5))) * 1000
-      running: String(customRoot.setting("exec", "")) !== ""
+      interval: customRoot.execIntervalMs
+      running: customRoot.execCommand !== ""
       repeat: true
       triggeredOnStart: true
-      onTriggered: root.runProcess(customProc)
+      onTriggered: customRoot.startExec()
     }
   }
 }
