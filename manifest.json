@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "raavail.islands",
+  "name": "Islands Bar",
+  "version": "1.0.0",
+  "author": "raavail",
+  "description": "A styling layer over the Omarchy bar: every widget floats as its own rounded island on the wallpaper, themed automatically from the active theme.",
+  "kinds": [
+    "bar"
+  ],
+  "entryPoints": {
+    "bar": "Bar.qml"
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.bar"
+  },
+  "license": "MIT"
+}
