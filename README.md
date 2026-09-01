@@ -11,7 +11,7 @@ It is a *styling* layer, not a fork of the bar's behaviour. Widget layout, setti
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/<you>/Omarchy-Islands-Bar.git
+omarchy plugin add https://github.com/raavail-lasso/Omarchy-Islands-Bar.git
 omarchy bar use islands.bar
 ```
 
