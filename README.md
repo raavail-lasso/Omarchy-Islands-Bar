@@ -35,14 +35,25 @@ The bar window paints nothing. Each widget slot paints its own rounded surface, 
 
 Island colour is taken from the active theme's `[bar] background`, so **every theme works with no per-theme setup** — switch themes and the islands follow. Corner radius follows Hyprland's `decoration:rounding`, so the bar matches your window corners.
 
-Works in all four bar positions. Vertical bars get the same treatment on the other axis.
+![The same bar under five themes](docs/themes.png)
+
+Nothing above was configured per theme. Light themes work too — `rose-pine` gets pale islands on a pale wallpaper without any special casing.
+
+Works in all four bar positions. Vertical bars get the same treatment on the other axis:
+
+![Vertical bar, rotated for legibility](docs/vertical.png)
 
 ### Per-item islands for grouped widgets
 
 Two widgets normally render several things inside one slot. Here each item gets its own island:
 
 - **Workspaces** — every workspace number is a separate island.
+
+  ![Workspace islands](docs/workspaces.png)
+
 - **Indicators** — every indicator is a separate island.
+
+  ![Indicator islands](docs/indicators.png)
 
 ### Indicators that hold still
 
@@ -57,58 +68,16 @@ Two changes to indicator behaviour, both scoped to this bar:
 - **The island tracks the drawer animation.** The stock tray permanently reserves the collapsed drawer's full width and masks it. Here the width follows the reveal, so the island grows and shrinks with the slide, and the pinned icons stay perfectly still while it does.
 - **Middle-click any tray icon opens the pin/unpin manager.** With the chevron gone once everything is pinned, right-clicking it is no longer an option, so the gesture lives on the icons themselves.
 
----
-
-## Configuration
-
-### Geometry
-
-All tunables sit in one block at the top of `Bar.qml`:
-
-| Property | Default | What it controls |
+| Everything pinned | One item hidden | Drawer open |
 |---|---|---|
-| `islandBackground` | `Color.bar.background` | Island fill; follows the theme |
-| `islandEdgeMargin` | `Style.space(8)` | Gap from the outermost island to the screen edge |
-| `islandPadX` | `Style.space(8)` | Padding inside an island, along the bar |
-| `islandInset` | `Style.space(2)` | How far the island sits inside the bar's thickness |
-| `islandThickness` | `barSize - islandInset * 2` | Island height (width on a vertical bar) |
-| `islandRadius` | `Style.cornerRadius` | Corner radius; follows Hyprland rounding |
-| `islandGap` | `Style.space(4)` | Visible gap between two islands |
-| `islandStep` | `islandPadX * 2 + islandGap` | Slot spacing that produces that gap |
-
-Each island overhangs its slot by `islandPadX` on both sides, and every layout uses `islandStep`, so the visible gap is `islandGap` everywhere.
-
-### Making a colour theme-settable
-
-`islandBackground` is a plain property, so you can point it at a theme key instead:
-
-```qml
-property color islandBackground: {
-  var v = Color.pick("bar.island-background", "")
-  return v ? Color.flatColor(v, Color.bar.background) : Color.bar.background
-}
-```
-
-Any theme can then set it in its own `shell.bar.toml`, or you can set it machine-wide in `~/.config/omarchy/shell.toml`:
-
-```toml
-[bar]
-island-background = "#101418"
-```
-
-Omarchy's TOML walker accepts any `[section] key = value`, so no upstream change is needed to introduce a new key.
-
-### Everything else
-
-Bar layout, widget settings, position and transparency are still plain Omarchy config — `~/.config/omarchy/shell.json` and the `omarchy bar` commands. This plugin does not read or write your layout.
+| ![](docs/tray-all-pinned.png) | ![](docs/tray-collapsed.png) | ![](docs/tray-expanded.png) |
+| No chevron — nothing to reveal | Chevron only; the island is one slot wide | The island has grown to fit the revealed icon |
 
 ---
 
 ## Limitations
 
 **Three widgets are forked.** `IslandWorkspaces.qml`, `IslandIndicators.qml` and `IslandTray.qml` are modified copies of Omarchy's own widgets, loaded in place of the registry versions. They will not pick up upstream fixes to those widgets. Everything else — audio, network, power, bluetooth, clock, weather, menu, third-party widgets — uses the shared registry and stays current. Tracking Omarchy 4.0.1.
-
-**Islands can be invisible on themes with flat wallpapers.** If a theme's wallpaper is nearly the same colour as its `[bar] background`, the gaps are there but you cannot see them. `harbordark` is the clearest example: its islands are `#1B1B1B` and its wallpapers are `rgb(28,28,28)` — a difference of about 2/255. Add a faint border to the island surfaces if you want them to read regardless of wallpaper.
 
 **Middle-click on tray icons is repurposed.** It opens the pin/unpin manager instead of calling the tray item's `secondaryActivate()`. Few applications implement that method, but if one you use does, you will lose it.
 
@@ -142,24 +111,6 @@ Three mechanisms in `Bar.qml` do the work:
 **`widgetSettingOverrides`** merges forced widget settings over whatever `shell.json` supplies — it is how the indicators stay revealed here without changing the shared config. It is applied in both places the bar hands settings to a widget: `ModuleSlot.injectProps()` and the in-place `applySettingsDelta()` fast path.
 
 To adapt another widget, copy it into `widgets/`, add the island, and add one line to `localWidgetOverrides`.
-
----
-
-## Notes for anyone hacking on a bar plugin
-
-Two things cost real time when this was built:
-
-**Cloned bars fail to load as shipped.** `omarchy plugin clone omarchy.bar` produces a bar that never mounts — no bar, no exclusion zone. `Bar.qml` declares `required property omarchyPath / barWidgetRegistry / barConfig`, but the shell loads a third-party bar through `Loader { source: <url> }`, which cannot initialise required properties; only the built-in path uses an inline `Component` that sets them declaratively. This plugin drops `required` and gives them defaults — `configureBar()` assigns all three in `onLoaded` anyway. Symptom: `Required property <name> was not initialized` in the journal.
-
-**The QML compile cache goes stale and silently serves old code.** After editing any file here:
-
-```bash
-rm -rf ~/.cache/quickshell/qmlcache && omarchy restart shell
-```
-
-Saving alone does not reliably hot-reload a `kind: "bar"` plugin.
-
-Also: `console.log` from a plugin does not reach the journal — use `console.warn` and read it with `journalctl --user --since "-30 seconds"`.
 
 ---
 
