@@ -885,7 +885,10 @@ Item {
   function refreshTransparentForeground() {
     if (!requestedTransparent || transparentForegroundProc.running) return
 
+    transparentForegroundProc.output = ""
+    transparentForegroundProc.truncated = false
     transparentForegroundProc.command = [
+      "timeout", "-k", "1s", root.probeTimeoutSeconds + "s",
       "omarchy-bar-text-color",
       root.position,
       String(root.barSize),
@@ -907,21 +910,50 @@ Item {
     onTriggered: root.refreshTransparentForeground()
   }
 
+  // Both probes below read a single short answer from a command, so they share
+  // the guard rails the reminder read uses: collect incrementally against a
+  // byte cap rather than buffering the stream, and run under `timeout`, which
+  // signals the command's whole process group when the deadline lands.
+  readonly property int probeMaxOutputBytes: 4096
+  readonly property int probeTimeoutSeconds: 5
+
   Process {
     id: transparentForegroundProc
-    stdout: SplitParser {
-      onRead: function(line) {
-        var value = String(line || "").trim()
-        if (!/^#[0-9A-Fa-f]{6}$/.test(value)) return
 
-        root.foregroundAnimationEnabled = false
-        root.transparentForeground = value
-        if (root.requestedTransparent) {
-          root.useTransparentForeground = true
-          root.transparent = true
+    // What this run has printed so far, and whether we cut it off.
+    // refreshTransparentForeground() resets both before every start.
+    property string output: ""
+    property bool truncated: false
+
+    stdout: StdioCollector {
+      waitForEnd: false
+      onDataChanged: {
+        if (transparentForegroundProc.truncated) return
+
+        if (text.length > root.probeMaxOutputBytes) {
+          transparentForegroundProc.truncated = true
+          transparentForegroundProc.output = ""
+          transparentForegroundProc.running = false
+        } else {
+          transparentForegroundProc.output = text
         }
-        root.restoreForegroundAnimation()
       }
+    }
+
+    onExited: function(exitCode) {
+      if (exitCode !== 0 || transparentForegroundProc.truncated) return
+
+      var lines = String(transparentForegroundProc.output || "").trim().split("\n")
+      var value = String(lines[lines.length - 1] || "").trim()
+      if (!/^#[0-9A-Fa-f]{6}$/.test(value)) return
+
+      root.foregroundAnimationEnabled = false
+      root.transparentForeground = value
+      if (root.requestedTransparent) {
+        root.useTransparentForeground = true
+        root.transparent = true
+      }
+      root.restoreForegroundAnimation()
     }
   }
 
@@ -990,17 +1022,66 @@ Item {
   // Presence of the `bar-off` flag = bar hidden. Watching the parent toggles
   // directory because FileView can't observe a file that doesn't exist yet,
   // and the flag is created/removed by `omarchy-toggle-bar`.
+  function probeBarHidden() {
+    if (barHiddenProbe.running) return
+
+    barHiddenProbe.output = ""
+    barHiddenProbe.truncated = false
+    barHiddenProbe.running = true
+  }
+
   Process {
     id: barHiddenProbe
-    running: true
-    command: ["bash", "-c", "[[ -f $HOME/.local/state/omarchy/toggles/bar-off ]] && echo yes || echo no"]
-    stdout: SplitParser { onRead: function(line) { root.barHidden = String(line).trim() === "yes" } }
+
+    command: ["timeout", "-k", "1s", root.probeTimeoutSeconds + "s", "bash", "-c",
+              "[[ -f $HOME/.local/state/omarchy/toggles/bar-off ]] && echo yes || echo no"]
+
+    property string output: ""
+    property bool truncated: false
+
+    stdout: StdioCollector {
+      waitForEnd: false
+      onDataChanged: {
+        if (barHiddenProbe.truncated) return
+
+        if (text.length > root.probeMaxOutputBytes) {
+          barHiddenProbe.truncated = true
+          barHiddenProbe.output = ""
+          barHiddenProbe.running = false
+        } else {
+          barHiddenProbe.output = text
+        }
+      }
+    }
+
+    onExited: function(exitCode) {
+      if (exitCode !== 0 || barHiddenProbe.truncated) return
+
+      root.barHidden = String(barHiddenProbe.output).trim() === "yes"
+    }
+
+    Component.onCompleted: root.probeBarHidden()
   }
   FileView {
     path: root.home + "/.local/state/omarchy/toggles"
     watchChanges: true
     printErrors: false
-    onFileChanged: barHiddenProbe.running = true
+    onFileChanged: root.probeBarHidden()
+  }
+
+  // The directory watch can permanently stop delivering events after flag
+  // changes land in quick succession, stranding the bar off screen until the
+  // shell restarts. `omarchy-toggle-bar` nudges this after flipping the flag
+  // so the probe re-reads it even when the watch has gone quiet.
+  IpcHandler {
+    target: "omarchy.bar"
+
+    // probeBarHidden() leaves a probe that is already in flight alone: it was
+    // launched by the directory watch after the flag flipped, so its answer is
+    // current, and restarting it here could swallow the result entirely.
+    function syncHidden(): void {
+      root.probeBarHidden()
+    }
   }
 
   Variants {

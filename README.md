@@ -100,6 +100,8 @@ widgets/IslandIndicators.qml   one island per indicator, single-block state
 widgets/IslandTray.qml         conditional chevron, animated width, middle-click manager
 widgets/TrayModel.js           tray helpers
 indicators/*.qml               the six indicator components
+docs/upstream.md               what is copied from Omarchy, and the rebase policy
+tools/upstream-diff            read-only drift check against the installed Omarchy
 ```
 
 Three mechanisms in `Bar.qml` do the work:
@@ -111,6 +113,8 @@ Three mechanisms in `Bar.qml` do the work:
 **`widgetSettingOverrides`** merges forced widget settings over whatever `shell.json` supplies — it is how the indicators stay revealed here without changing the shared config. It is applied in both places the bar hands settings to a widget: `ModuleSlot.injectProps()` and the in-place `applySettingsDelta()` fast path.
 
 To adapt another widget, copy it into `widgets/`, add the island, and add one line to `localWidgetOverrides`.
+
+Several of those files are copies of Omarchy source, and a copy can go stale and miss a fix upstream has already made. [`docs/upstream.md`](docs/upstream.md) records which files are copied, which Omarchy version they are aligned with, and the policy for rebasing them; `tools/upstream-diff` reports drift against the Omarchy installed on your machine.
 
 ---
 

@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# Report drift between the Omarchy files vendored into this plugin and the
+# Omarchy shell installed on this machine.
+#
+# Read-only by design: it diffs and prints. It writes nothing, installs
+# nothing and restarts nothing, so it is safe to run at any time.
+#
+# Usage: tools/upstream-diff [--names]
+
+set -uo pipefail
+
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+UPSTREAM="${OMARCHY_PATH:-/usr/share/omarchy}/shell/plugins/bar"
+NAMES_ONLY=0
+[[ ${1:-} == --names ]] && NAMES_ONLY=1
+
+# Copied from the Omarchy bar unchanged. Any difference is an upstream change
+# this plugin has not picked up yet.
+VERBATIM=(
+  BarModel.js
+  indicators/Dnd.qml
+  indicators/NightLight.qml
+  indicators/ScreenRecording.qml
+  indicators/StayAwake.qml
+)
+
+# Copied and then changed deliberately. Differences are expected here; the
+# point is to read them and decide whether an upstream change needs porting.
+ADAPTED=(
+  Bar.qml
+  indicators/Dictation.qml
+  indicators/Reminder.qml
+)
+
+[[ -d $UPSTREAM ]] || { echo "upstream bar not found: $UPSTREAM" >&2; exit 2; }
+
+drift=0
+
+report() {
+  local file="$1" kind="$2"
+  local mine="$ROOT/$file" theirs="$UPSTREAM/$file"
+
+  if [[ ! -f $theirs ]]; then
+    echo "[$kind] $file: gone from upstream"
+    return
+  fi
+
+  cmp -s "$mine" "$theirs" && return
+
+  echo "[$kind] $file differs from upstream"
+  (( NAMES_ONLY )) || diff -u "$theirs" "$mine" | sed 's/^/    /'
+}
+
+for f in "${VERBATIM[@]}"; do
+  before=$(report "$f" verbatim)
+  [[ -n $before ]] && { echo "$before"; drift=1; }
+done
+
+for f in "${ADAPTED[@]}"; do
+  out=$(report "$f" adapted)
+  [[ -n $out ]] && echo "$out"
+done
+
+if (( drift )); then
+  echo
+  echo "Verbatim files drifted: upstream changed and this plugin has not rebased."
+  exit 1
+fi
+
+echo "Verbatim files match ${UPSTREAM}."
