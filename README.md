@@ -12,7 +12,7 @@ It is a *styling* layer, not a fork of the bar's behaviour. Widget layout, setti
 
 ```bash
 omarchy plugin add https://github.com/<you>/Omarchy-Islands-Bar.git
-omarchy bar use raavail.islands
+omarchy bar use islands.bar
 ```
 
 To go back at any time:
