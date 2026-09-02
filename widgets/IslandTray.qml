@@ -140,7 +140,6 @@ BarWidget {
     trayMenuOpen = false
   }
 
-
   function openTrayMenu(item, anchorItem, mouse) {
     if (!item || !item.menu) {
       var point = anchorItem.QsWindow.contentItem.mapFromItem(anchorItem, mouse.x, mouse.y)
@@ -165,16 +164,20 @@ BarWidget {
     // it straight to IconImage; guessing a theme sub-directory here only broke
     // apps whose layout didn't match the guess.
     //
-    // Anything arriving under another scheme did not come from that
-    // resolution and is not this bar's to fetch: http(s) would turn a tray
-    // entry into a network request the user never asked for, and data: into
-    // arbitrary decode work. Allow the resolved form and local files, drop the
-    // rest. Decode size stays bounded by the sourceSize each Image sets.
+    // That resolution is the only source trusted here. Quickshell hands both
+    // tray items and menu entries an image:// provider URL, built either from
+    // an icon-theme name or from the pixmap the app sent over DBus, so a
+    // string arriving in any other form did not come from it.
+    //
+    // The rest are refused rather than loaded. A path or file: URL would let
+    // whatever is on the tray choose a file for a synchronous Image to open:
+    // a FIFO or device node that never finishes, a symlink to somewhere the
+    // shell should not read, or an image that decompresses far larger than it
+    // downloads. sourceSize bounds the dimensions asked for, not the bytes
+    // read to get there, so it is no answer to any of those. http(s) would
+    // turn a tray entry into a network request the user never asked for.
     var value = String(icon || "")
-    if (!value) return ""
-    if (value.indexOf("image:") === 0) return value
-    if (value.indexOf("file:") === 0 || value.indexOf("/") === 0) return value
-    return ""
+    return value.indexOf("image://") === 0 ? value : ""
   }
 
   // Symbolic icons ship a fixed fill (often near-white) that the host is meant
@@ -730,6 +733,7 @@ BarWidget {
                 width: Style.space(16)
                 height: Style.space(16)
                 fillMode: Image.PreserveAspectFit
+                asynchronous: true
                 // Decode at physical pixels: IconImage uses the logical size,
                 // which leaves PNG icons upscaled and blurry on HiDPI displays.
                 sourceSize.width: width * Screen.devicePixelRatio
@@ -802,6 +806,9 @@ BarWidget {
       id: trayIconImage
       anchors.fill: parent
       fillMode: Image.PreserveAspectFit
+      // Keep decoding off the GUI thread wherever the provider supports it,
+      // so a slow or awkward icon costs a late paint rather than a stalled bar.
+      asynchronous: true
       // Decode at physical pixels: IconImage uses the logical size,
       // which leaves PNG icons upscaled and blurry on HiDPI displays.
       sourceSize.width: Math.round(Math.min(width, height) * Screen.devicePixelRatio)
