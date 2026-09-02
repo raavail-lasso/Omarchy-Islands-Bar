@@ -31,6 +31,16 @@ ADAPTED=(
   Bar.qml
   indicators/Dictation.qml
   indicators/Reminder.qml
+  widgets/TrayModel.js
+)
+
+# Rewritten from an upstream widget under a new name, one island per item.
+# They drifted furthest, so they are the likeliest to miss a fix landing
+# upstream, which is precisely why they are listed rather than called original.
+DERIVED=(
+  "widgets/IslandTray.qml:widgets/Tray.qml"
+  "widgets/IslandWorkspaces.qml:widgets/Workspaces.qml"
+  "widgets/IslandIndicators.qml:widgets/Indicators.qml"
 )
 
 [[ -d $UPSTREAM ]] || { echo "upstream bar not found: $UPSTREAM" >&2; exit 2; }
@@ -38,8 +48,8 @@ ADAPTED=(
 drift=0
 
 report() {
-  local file="$1" kind="$2"
-  local mine="$ROOT/$file" theirs="$UPSTREAM/$file"
+  local file="$1" kind="$2" counterpart="${3:-$1}"
+  local mine="$ROOT/$file" theirs="$UPSTREAM/$counterpart"
 
   if [[ ! -f $theirs ]]; then
     echo "[$kind] $file: gone from upstream"
@@ -48,7 +58,7 @@ report() {
 
   cmp -s "$mine" "$theirs" && return
 
-  echo "[$kind] $file differs from upstream"
+  echo "[$kind] $file differs from $counterpart"
   (( NAMES_ONLY )) || diff -u "$theirs" "$mine" | sed 's/^/    /'
 }
 
@@ -59,6 +69,11 @@ done
 
 for f in "${ADAPTED[@]}"; do
   out=$(report "$f" adapted)
+  [[ -n $out ]] && echo "$out"
+done
+
+for pair in "${DERIVED[@]}"; do
+  out=$(report "${pair%%:*}" derived "${pair##*:}")
   [[ -n $out ]] && echo "$out"
 done
 

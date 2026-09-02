@@ -969,6 +969,11 @@ Item {
       process.running = true
   }
 
+  // Tooltip text reaches here from widgets that read it off external sources,
+  // the tray's window titles among them, so it is capped once at the single
+  // point every tooltip passes through rather than at each caller.
+  readonly property int maxTooltipChars: 512
+
   function showTooltip(target, text) {
     clearTooltip()
 
@@ -977,10 +982,13 @@ Item {
       return
     }
 
+    var capped = String(text)
+    if (capped.length > maxTooltipChars) capped = capped.substring(0, maxTooltipChars) + "\u2026"
+
     var request = tooltipRequest + 1
     tooltipRequest = request
     pendingTooltipTarget = target
-    pendingTooltipText = text
+    pendingTooltipText = capped
 
     Qt.callLater(function() {
       if (request !== tooltipRequest) return
@@ -1227,6 +1235,7 @@ Item {
 
         Text {
           id: tooltipLabel
+          textFormat: Text.PlainText
           anchors.centerIn: parent
           text: root.tooltipText
           color: Color.tooltip.text

@@ -37,23 +37,36 @@ overwriting.
 
 | File | Why it diverges |
 | --- | --- |
-| `Bar.qml` | Islands layout and geometry; bounded output collection for custom command modules and the two internal probes. |
+| `Bar.qml` | Islands layout and geometry; bounded output collection for custom command modules and the two internal probes; capped tooltip text. |
 | `indicators/Dictation.qml` | Bounded line framing, session deadline and restart policy on the status follower. |
 | `indicators/Reminder.qml` | Bounded output collection and a deadline on the reminder read. |
+| `widgets/TrayModel.js` | Adds the shared text cap used on tray-supplied strings. |
+
+### Derived
+
+Rewritten from an upstream widget under a new name so each item can carry its
+own island. These have drifted furthest from their counterparts, which makes
+them the likeliest to miss a fix that lands upstream, so they are tracked here
+rather than treated as original work.
+
+| File | Upstream counterpart |
+| --- | --- |
+| `widgets/IslandTray.qml` | `widgets/Tray.qml` |
+| `widgets/IslandWorkspaces.qml` | `widgets/Workspaces.qml` |
+| `widgets/IslandIndicators.qml` | `widgets/Indicators.qml` |
 
 ### Original
 
-`widgets/IslandIndicators.qml`, `widgets/IslandTray.qml`,
-`widgets/IslandWorkspaces.qml` and `BarModel.js`'s island helpers are written
+`BarModel.js`'s island helpers and the island geometry in `Bar.qml` are written
 for this plugin and have no upstream counterpart.
 
 ## Policy
 
 1. On every Omarchy release, run `tools/upstream-diff`.
 2. Verbatim files that drifted are re-copied from upstream.
-3. Adapted files are diffed by hand, and upstream changes are ported into the
-   local version. Correctness and security fixes are ported; styling changes
-   are ported only where they do not fight the islands layout.
+3. Adapted and derived files are diffed by hand, and upstream changes are
+   ported into the local version. Correctness and security fixes are ported;
+   styling changes are ported only where they do not fight the islands layout.
 4. Security-relevant upstream fixes are released here within **7 days** of the
    upstream release.
 5. The *Aligned with* version above is updated in the same commit as the

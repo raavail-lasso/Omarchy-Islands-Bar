@@ -38,11 +38,22 @@ function ownedByOmarchy(item, layout) {
     || (layoutHasWidget(layout, "omarchy.dropbox") && itemNamed(item, "dropbox"))
 }
 
+// Every string on the tray comes from whatever apps are running, so it is
+// length-checked before it is stored or rendered. Truncating at the source
+// keeps an absurd title from reaching a Text element at all, rather than
+// relying on elide to hide it after the fact.
+function capText(value, limit) {
+  var text = String(value === undefined || value === null ? "" : value)
+  if (text.length <= limit) return text
+  return text.substring(0, limit) + "\u2026"
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     itemNamed: itemNamed,
     entryId: entryId,
     layoutHasWidget: layoutHasWidget,
-    ownedByOmarchy: ownedByOmarchy
+    ownedByOmarchy: ownedByOmarchy,
+    capText: capText
   }
 }
